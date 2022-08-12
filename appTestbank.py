@@ -1,18 +1,25 @@
-import streamlit as st # web development
-import numpy as np # np mean, np random 
-import pandas as pd # read csv, df manipulation
-import plotly.express as px # interactive charts 
-import requests, io, time
-from datetime import datetime
+import random # wordt gebruikt voor een willekeurig nummer te generen voor als het programma getest wordt
+import streamlit as st # het webapp framework
+import numpy as np # wiskunde pakket
+import pandas as pd # pandas is gemaakt op numpy, deze gebruiken we voor onze dataframes en excel communicatie
+import plotly.express as px # plotly gebruiken we voor onze grafieken
+import requests, io, time # requests is het pakket voor de http requests, io is het pakket voor de file input/output, time is het pakket voor de tijd handelingen
+from datetime import datetime # datetime is het pakket voor de tijd handelingen met datum
 
-# settings
+# settings van de webapp
 st.set_page_config(
     page_title = 'EVW | Testbank Dashboard',
     page_icon = '✅',
     layout = 'wide'
 )
 
-ds_kw = []
+"""
+ds = data serie/set, een lijst van informatie
+df = data frame, een 2D tabel met informatie met index & kolommen
+[] is een lege lijst, verzameling van informatie. Deze wordt aangemaakt zodat we aan deze lijst kunnen toevoegen.
+"""
+
+ds_kw = [] 
 ds_tijd = []
 ds_hz = []
 ds_spanning = []
@@ -22,7 +29,11 @@ placeholder = st.empty()
 # testbank object
 
 class TestBank(object):  
-
+    """TestBank opbject
+    Dit is een class/object die elke keer aangemaakt wordt zodat er object georienteerd kan geprogrammeerd worden.
+    De Testbank wordt aangemaakt met verschillende waarden, waarmee we deze objecten kunnen configureren adhv welke waarden onze testcase heeft.
+    In de __init__ functie proberen we alles te configureren en verbinding te maken. We werken met het pricinipe EAFP.
+    """
     def __init__(self, naam, transfo_ratio, nominaal_vermogen, stabieliteits_factor, tijdsinterval, tijdsduur, meet_stand, nominaal_spanning):
         
         try:
@@ -95,13 +106,15 @@ class TestBank(object):
             self.metingen_dataset = []
             self.metingen_klaar = False
             self.run = True
+            self.step_counter = 0 
             
             print("Succes", "Connectie met testbank gemaakt.")
             
         except:
             self.status = "Error"
             print("Error", "Testbank connectie gefaald.")
-
+    
+    # Hier halen we data op via de webserver, we zetten ze om naar een lijst.
     def get_metingen(self):
         
         r = requests.get(self.url)
@@ -121,8 +134,8 @@ class TestBank(object):
 
         return data
     
+    # We gebruiken deze funtie om de metingen te verwerken en om deze in een dataset te zetten en bijhouden.
     def waardes_meten(self):
-        print("meten")
         
         dsy = self.get_metingen()
         ds = [int(time.perf_counter())] + dsy
@@ -133,16 +146,16 @@ class TestBank(object):
             ds[e] = ds[e]/self.register_bewerkingen[e]
         
         self.metingen_dataset.append(ds)
-        
-        print(self.metingen_dataset)
-        
+    
+    # Een functie die de als antwoord geeft hoeveel seconden er gepasseerd zijn sinds de connnectie is gemaakt.
     def tijd_sinds_created(self):
         return time.perf_counter() - self.created
     
+    # Een functie die weergeeft hoeveel tijd er is gepasseerd sinds de laatste meting (in seconden).
     def tijd_sinds_laatste_meting(self):
-        sinds_laatste_meting = time.perf_counter() - self.laatste_meting
-        return sinds_laatste_meting
+        return time.perf_counter() - self.laatste_meting
     
+    # Een functie die onze opgeslagen metingen in de data set in excel steekt.
     def metingen_naar_excel(self):
         
         df = pd.DataFrame(self.metingen_dataset, columns=self.register_lijst)
@@ -159,19 +172,45 @@ class TestBank(object):
 
         writer.save()
     
+    # De abandon functie, deze functie zal de tijd doorspoelen tot juist voor de meting. Momenteel print deze enkel dat hij is ingeduwt. De automatische cyclus is nog niet af. 
     def abandon(self):
-
         print("Abandoned", "Magische knop ingeduwt.")
-        
+    
+    # Deze functie zal gebruikt worden om een waarde in een register/vlag te schrijven op de plc
+    def write_value_register(self, value, register):
+        print(value, register)
+       
+    # Deze functie zal gebruikt worden om een waarde in een register/vlag te lezen van de plc 
+    def read_register(self, register):
+        value = random.randint(0, 100)
+        return value
+    
+    # Deze functie zal als alles goed verlopen is in de cyclys stap, de plc laten weten dat de pc klaar is voor de volgende stap.
+    # if R1000 = R1100 => volgende stap
+    # De plc zet de waarde R1000 op welke stap de pc moet uitvoeren, als de pc klaar is zet hij R1100 op hetzelfde nummer.    
+    def step_counter_plus(self):
+        self.step_counter += 1
+        self.send_value_register(self.step_counter, 'R1100')
+    
+    # Error schrijven naar error vlag (voor pc) op de plc    
+    def in_error(self):
+        self.send_value_register(1, 'F1103')
+    
+    # F1004 is de waar de plc laat weten dat er een meting mag volgen. Als F1004 = 1 is, mag de pc meten. Anders wacht de pc en gaan we niet de volgende stap uitvoeren. Als de stap is uitgevoerd zal de pc de vlag terug op 0 zeten.
+    # If self.step_counter == R1100 - 1 && F1004 = 1: mag de pc naar de volgende stap.
+    def can_continue(self):
+        return self.read_register('F1004')
 
+# Het aanmaken van het testbank object.        
 def testbank_create(naam, transfo_ratio, nominaal_vermogen, stabieliteits_factor, tijdsinterval, tijdsduur, meet_stand, nominaal_spanning):
 
     test_case = TestBank(naam=naam, transfo_ratio=transfo_ratio, nominaal_vermogen=nominaal_vermogen, stabieliteits_factor=stabieliteits_factor, tijdsinterval=tijdsinterval, tijdsduur=tijdsduur, meet_stand=meet_stand, nominaal_spanning=nominaal_spanning)
     
     return test_case
 
-# Streamlit pages
+# Streamlit paginas
 
+# De pagina waar we de testbank aanmaken
 def page_create_testbank():
  
     st.title("EVW testbank instellingen")
@@ -207,6 +246,7 @@ def page_create_testbank():
     
             return testCase
 
+# Algemeen dashboard pagina
 def page_dashboard(testCase):
         
     with placeholder.container():
@@ -219,7 +259,7 @@ def page_dashboard(testCase):
         ds_spanning.append(dsy[1])
         ds_tijd.append(dsx)
         
-        if len(ds_kw) > 25:
+        if len(ds_kw) > 50:
             ds_kw.pop(0)
             ds_tijd.pop(0)
             ds_hz.pop(0)
@@ -228,10 +268,10 @@ def page_dashboard(testCase):
         df_fig1 = ({"tijd":ds_tijd, "vermogen":ds_kw})
         df_fig1 = pd.DataFrame(df_fig1)
             
-        df_fig2 = ({"tijd":ds_tijd, "frequentie":ds_hz})
+        df_fig2 = ({"tijd":ds_tijd[-30:], "frequentie":ds_hz[-30:]})
         df_fig2 = pd.DataFrame(df_fig2)
         
-        df_fig4 = ({"tijd":ds_tijd, "spanning":ds_spanning})
+        df_fig4 = ({"tijd":ds_tijd[-30:], "spanning":ds_spanning[-30:]})
         df_fig4 = pd.DataFrame(df_fig4)
 
         st.title(f"{testCase.naam}")
@@ -304,7 +344,7 @@ def page_dashboard(testCase):
         
         st.markdown("""---""")
 
-# streamlit app
+# streamlit main app script
                 
 def main():
     
@@ -346,6 +386,43 @@ def main():
             
             start = time.perf_counter()
             
+            if testCase.can_continue():
+                plc_step = testCase.get_plc_counter()
+                
+                match plc_step:
+                
+                    case 1:
+                        # ....
+                        testCase.step_counter_plus()
+
+                    case 2:
+                        # ....
+                        testCase.step_counter_plus()
+                    
+                    case 3:
+                        # ....
+                        testCase.step_counter_plus()
+
+                    case 4:
+                        # ....
+                        testCase.step_counter_plus()
+
+                    case 5:
+                        # ....
+                        testCase.step_counter_plus()
+                    
+                    case 6:
+                        # ....
+                        testCase.step_counter_plus()
+
+                    case 7:
+                        # ....
+                        testCase.step_counter_plus()
+                        
+                    case 8:
+                        # ....
+                        testCase.step_counter_plus()
+                        
             page_dashboard(testCase)
             
             end = time.perf_counter()
