@@ -13,11 +13,11 @@ st.set_page_config(
     layout = 'wide'
 )
 
-"""
-ds = data serie/set, een lijst van informatie
-df = data frame, een 2D tabel met informatie met index & kolommen
-[] is een lege lijst, verzameling van informatie. Deze wordt aangemaakt zodat we aan deze lijst kunnen toevoegen.
-"""
+# """
+# ds = data serie/set, een lijst van informatie
+# df = data frame, een 2D tabel met informatie met index & kolommen
+# [] is een lege lijst, verzameling van informatie. Deze wordt aangemaakt zodat we aan deze lijst kunnen toevoegen.
+# """
 
 ds_kw = [] 
 ds_tijd = []
@@ -170,6 +170,7 @@ class TestBank(object):
             col_idx = df.columns.get_loc(column)
             writer.sheets['metingen'].set_column(col_idx, col_idx, column_length)
 
+        print('writer save')
         writer.save()
     
     # De abandon functie, deze functie zal de tijd doorspoelen tot juist voor de meting. Momenteel print deze enkel dat hij is ingeduwt. De automatische cyclus is nog niet af. 
@@ -178,7 +179,7 @@ class TestBank(object):
     
     # Deze functie zal gebruikt worden om een waarde in een register/vlag te schrijven op de plc
     def write_value_register(self, value, register):
-        print(value, register)
+        return print(f' {value} - {register}')
        
     # Deze functie zal gebruikt worden om een waarde in een register/vlag te lezen van de plc 
     def read_register(self, register):
@@ -190,7 +191,7 @@ class TestBank(object):
     # De plc zet de waarde R1000 op welke stap de pc moet uitvoeren, als de pc klaar is zet hij R1100 op hetzelfde nummer.    
     def step_counter_plus(self):
         self.step_counter += 1
-        self.send_value_register(self.step_counter, 'R1100')
+        self.write_value_register(self.step_counter, 'R1100')
     
     # Error schrijven naar error vlag (voor pc) op de plc    
     def in_error(self):
@@ -200,6 +201,9 @@ class TestBank(object):
     # If self.step_counter == R1100 - 1 && F1004 = 1: mag de pc naar de volgende stap.
     def can_continue(self):
         return self.read_register('F1004')
+
+    def get_plc_counter(self):
+        return self.read_register('R1100')
 
 # Het aanmaken van het testbank object.        
 def testbank_create(naam, transfo_ratio, nominaal_vermogen, stabieliteits_factor, tijdsinterval, tijdsduur, meet_stand, nominaal_spanning):
@@ -231,7 +235,7 @@ def page_create_testbank():
     
     meet_stand = st.radio(
      "Automatisch of handmatig metingen opslaan:",
-     ('Automatisch', 'Handmatig', 'Overzicht')
+     ( 'Handmatig', 'Automatisch', 'Overzicht')
      )
     
     b_bekijken = st.button('Connectie met testbank maken')
