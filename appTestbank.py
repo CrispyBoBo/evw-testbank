@@ -38,16 +38,16 @@ class TestBank(object):
         try:
             # Ip van de plc.
             self.ip = "192.168.218.1"
-
+            
             # De injectielink voor de Ordervalues.
-            self.injectielink = f"http://{self.ip}/{self.ip}/PLC_WKK/cgi-bin/OrderValues.exe?TestBank+dummy+1000Code SAIA+PDP,,R406,d+PDP,,R407,d+PDP,,R408,d+PDP,,R409,d+PDP,,R410,d+PDP,,R411,d+PDP,,R413,d+PDP,,R414,d+PDP,,R415,d+PDP,,R412,d+PDP,,R402,d+PDP,,R2377,d+PDP,,R2377,d+PDP,,R2370,d+PDP,,R2371,d+PDP,,R2476,d+PDP,,R2473,d+PDP,,R2474,d+PDP,,R2471,d+PDP,,R2470,d+PDP,,R2470,d+PDP,,R2675,d+PDP,,R2675,d"
+            self.injectielink = f"{self.ip}/PLC_TESTBANK/cgi-bin/OrderValues.exe?TestBankMetingen+dummy+1000Code SAIA+PDP,,R413,d+PDP,,R414,d+PDP,,R415,d+PDP,,R416,d+PDP,,R417,d+PDP,,R418,d+PDP,,R420,d+PDP,,R421,d+PDP,,R422,d+PDP,,R419,d+PDP,,R409,d+PDP,,R500,d+PDP,,R501,d+PDP,,R502,d+PDP,,R503,d+PDP,,R504,d+PDP,,R505,d+PDP,,R506,d+PDP,,R507,d+PDP,,R508,d+PDP,,R509,d+PDP,,R510,d+PDP,,R511,d+PDP,,R512,d+PDP,,R513,d+PDP,,R514,d"
             
             # De url om de ordervalues file "testbank" uit te lezen.
-            self.url = f"http://{self.ip}/station_name/cgi-bin/ReadFile.exe?TestBank"
+            self.url = f"http://{self.ip}/PLC_TESTBANK/cgi-bin/ReadFile.exe?TestBankMetingen"
             
             # Write & read val links
-            self.url_readval = f"http://{self.ip}/station_name/cgi-bin/readVal.exe?"
-            self.url_writeval = f"http://{self.ip}/station_name/cgi-bin/writeVal.exe?"
+            self.url_readval = f"http://{self.ip}/PLC_TESTBANK/cgi-bin/readVal.exe?"
+            self.url_writeval = f"http://{self.ip}/PLC_TESTBANK/cgi-bin/writeVal.exe?"
 
             # Hier injecteren we de ordervalues & lezen we ze eens uit (in de background), als dit faalt stopt de try loop en is de connectie mislukt.
             requests.get(self.injectielink)
@@ -76,7 +76,6 @@ class TestBank(object):
 
             # De titels van de register, in juiste volgorde (na sorting registers van klein naar groot) voor het excel bestand voor An.
             self.register_lijst = [
-                'Tijd',
                 'F - Frequentie',
                 'U12 - Spanning F1',
                 'U23 - Spanning F2',
@@ -88,18 +87,23 @@ class TestBank(object):
                 'P - Actief vermogen',
                 'Q - Reactief vermogen',
                 'S - Schijnbaar vermogen',
-                'Temperatuur olie 1',
-                'Temperatuur olie 2',
-                'Temperatuur water 1',
-                'Temperatuur water 2',
-                'Temperatuur inlaat 1',
-                'Temperatuur inlaat 2',
-                'Temperatuur uitlaat 1',
-                'Temperatuur uitlaat 2',
-                'Temperatuur omgeving',
-                'Temperatuur alternator',
                 'Olie druk 1',
                 'Olie druk 2'
+                'Temperatuur water in',
+                'Temperatuur water uit',
+                'Temperatuur alternator',
+                'Temperatuur inlaat',
+                'Temperatuur afblaas',
+                'Temperatuur uitlaat 1',
+                'Temperatuur uitlaat 2',
+                'Temperatuur wikkeling 1',
+                'Temperatuur wikkeling 2',
+                'Temperatuur wikkeling 3',
+                'Temperatuur omgeving 1',
+                'Temperatuur omgeving 2',
+                'Temperatuur omkasting',
+                'Temperatuur olie 1',
+                'Temperatuur olie 2',
             ]
             # De delingen voor de register waardes, in juiste volgorde (na sorting registers van klein naar groot).
             self.register_bewerkingen = [
@@ -125,7 +129,12 @@ class TestBank(object):
                 10,
                 10,
                 10,
-                10
+                10,
+                10,
+                10,
+                10,
+                10,
+                10,
             ]
             
             print("Succes", "Connectie met testbank gemaakt.")
@@ -181,7 +190,7 @@ class TestBank(object):
     
     def metingen_naar_excel(self):
         # Een functie die onze opgeslagen metingen in de data set in excel steekt.
-        df = pd.DataFrame(self.metingen_dataset, columns=self.register_lijst)
+        df = pd.DataFrame(self.metingen_dataset, columns=['Tijd']+self.register_lijst)
                     
         self.metingen_dataset = []
                     
@@ -296,7 +305,7 @@ def page_dashboard(testCase):
         
         # Deze 4 zijn data lijsten die we gaan tonen
         ds_kw.append(dsy[8])
-        ds_hz.append(dsy[0]/testCase.register_bewerkingen[1])
+        ds_hz.append(dsy[0]/testCase.register_bewerkingen[0])
         ds_spanning.append(dsy[1])
         ds_tijd.append(dsx)
         
@@ -330,40 +339,45 @@ def page_dashboard(testCase):
             metric12, metric13, metric14, metric15 = st.columns(4)
             metric16, metric17, metric18, metric19 = st.columns(4)
             metric20, metric21, metric22, metric23 = st.columns(4)
+            metric24, metric25, metric26, metric_ = st.columns(4)
             
             # Onze waardes defineren. 
-            metric12.metric(label="Temperatuur olie 1", value=f"{dsy[11]/testCase.register_bewerkingen[12]} °C")
-            metric13.metric(label="Temperatuur olie 2", value=f"{dsy[12]/testCase.register_bewerkingen[13]} °C")
-            metric14.metric(label="Temperatuur water 1", value=f"{dsy[13]/testCase.register_bewerkingen[14]} °C")
-            metric15.metric(label="Temperatuur water 2", value=f"{dsy[14]/testCase.register_bewerkingen[15]} °C")
+            metric12.metric(label="Olie druk 1", value=f"{dsy[11]/testCase.register_bewerkingen[11]} bar")
+            metric13.metric(label="Olie druk 2", value=f"{dsy[12]/testCase.register_bewerkingen[12]} bar")
+            metric14.metric(label="Temperatuur olie 1", value=f"{dsy[23]/testCase.register_bewerkingen[23]} °C")
+            metric15.metric(label="Temperatuur olie 2", value=f"{dsy[24]/testCase.register_bewerkingen[24]} °C")
 
-            metric16.metric(label="Temperatuur inlaat 1", value=f"{dsy[15]/testCase.register_bewerkingen[16]} °C")
-            metric17.metric(label="Temperatuur inlaat 2", value=f"{dsy[16]/testCase.register_bewerkingen[17]} °C")
-            metric18.metric(label="Temperatuur uitlaat 1", value=f"{dsy[17]/testCase.register_bewerkingen[18]} °C")
-            metric19.metric(label="Temperatuur uitlaat 2", value=f"{dsy[18]/testCase.register_bewerkingen[19]} °C")
-            
-            metric20.metric(label="Temperatuur omgeving", value=f"{dsy[19]/testCase.register_bewerkingen[20]} °C")
-            metric21.metric(label="Temperatuur alternator", value=f"{dsy[20]/testCase.register_bewerkingen[21]} °C")
-            metric22.metric(label="Olie druk 1", value=f"{dsy[21]/testCase.register_bewerkingen[22]} bar")
-            metric23.metric(label="Olie druk 2", value=f"{dsy[22]/testCase.register_bewerkingen[23]} bar")
-            
-            st.markdown("### Elektrische metingen")      
+            metric16.metric(label="Temperatuur alternator", value=f"{dsy[15]/testCase.register_bewerkingen[15]} °C")
+            metric17.metric(label="Temperatuur inlaat", value=f"{dsy[16]/testCase.register_bewerkingen[16]} °C")
+            metric18.metric(label="Temperatuur omkasting", value=f"{dsy[25]/testCase.register_bewerkingen[25]} °C")
+            metric19.metric(label="Temperatuur afblaas", value=f"{dsy[17]/testCase.register_bewerkingen[17]} °C")
+
+            metric20.metric(label="Temperatuur water in", value=f"{dsy[13]/testCase.register_bewerkingen[13]} °C")
+            metric21.metric(label="Temperatuur water uit", value=f"{dsy[14]/testCase.register_bewerkingen[14]} °C")
+            metric22.metric(label="Temperatuur uitlaat 1", value=f"{dsy[18]/testCase.register_bewerkingen[18]} °C")
+            metric23.metric(label="Temperatuur uitlaat 2", value=f"{dsy[19]/testCase.register_bewerkingen[19]} °C")
+
+            metric24.metric(label="Temperatuur wikkeling 1", value=f"{dsy[20]/testCase.register_bewerkingen[20]} °C")
+            metric25.metric(label="Temperatuur wikkeling 2", value=f"{dsy[21]/testCase.register_bewerkingen[21]} °C")
+            metric26.metric(label="Temperatuur wikkeling 3", value=f"{dsy[22]/testCase.register_bewerkingen[22]} °C")
+
+            st.markdown("### Elektrische metingen")
             
             # Onze kolom plaatsen op de pagina reserveren voor deze waardes.
             metric1, metric4, metric7, metric10 = st.columns(4)
             metric2, metric5, metric8, metric11 = st.columns(4)
-            metric3, metric6, metric9, metric_ = st.columns(4)
+            metric3, metric6, metric9, metric__ = st.columns(4)
 
             # Onze waardes defineren.               
             metric1.metric(label="U12 - Spanning F1", value=f"{dsy[1]} V")
             metric2.metric(label="U23 - Spanning F2", value=f"{dsy[2]} V")
             metric3.metric(label="U32 - Spanning F3", value=f"{dsy[3]} V")
-            metric10.metric(label="F - Frequentie", value=f"{dsy[0]/testCase.register_bewerkingen[1]} Hz")
+            metric10.metric(label="F - Frequentie", value=f"{dsy[0]/testCase.register_bewerkingen[0]} Hz")
             
             metric4.metric(label="I1 - Stroom L1", value=f"{dsy[4]} A")
             metric5.metric(label="I2 - Stroom L2", value=f"{dsy[5]} A")
             metric6.metric(label="I3 - Stroom L3", value=f"{dsy[6]} A")
-            metric11.metric(label="PF - Cos φ", value=f"{dsy[7]/testCase.register_bewerkingen[8]}")
+            metric11.metric(label="PF - Cos φ", value=f"{dsy[7]/testCase.register_bewerkingen[7]}")
             
             metric7.metric(label="P - Actief vermogen", value=f"{dsy[8]} kW")
             metric8.metric(label="Q - Reactief vermogen", value=f"{dsy[9]} VAR")
@@ -375,7 +389,7 @@ def page_dashboard(testCase):
             # Onze grote grafiek aanmaken voor vermogen.
             st.markdown("### ⚡ Actief vermogen (kW)")
             fig = px.line(df_fig1, x="tijd", y="vermogen")
-            fig.update_layout(yaxis_range=[0,testCase.nominaal_vermogen*1.2])
+            fig.update_layout(yaxis_range=[0,testCase.nominaal_vermogen*1.25])
             st.plotly_chart(fig,use_container_width=True)
             
             # Onze 2 kleine grafieken een plaats geven in kolommen.
