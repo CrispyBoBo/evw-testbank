@@ -37,22 +37,22 @@ class TestBank(object):
         
         try:
             # Ip van de plc.
-            self.ip = "192.168.218.1"
+            self.ip = "192.168.20.70"
             
             # De injectielink voor de Ordervalues.
-            self.injectielink = f"{self.ip}/PLC_TESTBANK/cgi-bin/OrderValues.exe?TestBankMetingen+dummy+1000Code SAIA+PDP,,R413,d+PDP,,R414,d+PDP,,R415,d+PDP,,R416,d+PDP,,R417,d+PDP,,R418,d+PDP,,R420,d+PDP,,R421,d+PDP,,R422,d+PDP,,R419,d+PDP,,R409,d+PDP,,R500,d+PDP,,R501,d+PDP,,R502,d+PDP,,R503,d+PDP,,R504,d+PDP,,R505,d+PDP,,R506,d+PDP,,R507,d+PDP,,R508,d+PDP,,R509,d+PDP,,R510,d+PDP,,R511,d+PDP,,R512,d+PDP,,R513,d+PDP,,R514,d"
-            
+            self.injectielink = f"http://{self.ip}/station_name/cgi-bin/OrderValues.exe?TestBankMetingen+dummy+1000Code SAIA+PDP,,R413,d+PDP,,R414,d+PDP,,R415,d+PDP,,R416,d+PDP,,R417,d+PDP,,R418,d+PDP,,R420,d+PDP,,R421,d+PDP,,R422,d+PDP,,R419,d+PDP,,R409,d+PDP,,R500,d+PDP,,R501,d+PDP,,R502,d+PDP,,R503,d+PDP,,R504,d+PDP,,R505,d+PDP,,R506,d+PDP,,R507,d+PDP,,R508,d+PDP,,R509,d+PDP,,R510,d+PDP,,R511,d+PDP,,R512,d+PDP,,R513,d+PDP,,R514,d"
             # De url om de ordervalues file "testbank" uit te lezen.
-            self.url = f"http://{self.ip}/PLC_TESTBANK/cgi-bin/ReadFile.exe?TestBankMetingen"
-            
+            self.url = f"http://{self.ip}/station_name/cgi-bin/ReadFile.exe?TestBankMetingen"
             # Write & read val links
-            self.url_readval = f"http://{self.ip}/PLC_TESTBANK/cgi-bin/readVal.exe?"
-            self.url_writeval = f"http://{self.ip}/PLC_TESTBANK/cgi-bin/writeVal.exe?"
+            self.url_readval = f"http://{self.ip}/station_name/cgi-bin/readVal.exe?"
+            self.url_writeval = f"http://{self.ip}/station_name/cgi-bin/writeVal.exe?"
 
             # Hier injecteren we de ordervalues & lezen we ze eens uit (in de background), als dit faalt stopt de try loop en is de connectie mislukt.
+            print('requests')
             requests.get(self.injectielink)
+            print('self injectie ok')
             requests.get(self.url)
-            
+            print('url data ophalen ok')
             # Standaard waarden die we nodig hebben en moeten zetten zodat ze bestaan enkel als de request een succes was.
             self.metingen_dataset = []
             self.metingen_klaar = False
@@ -139,14 +139,14 @@ class TestBank(object):
         except:
             # De except zal runnen als de try loop ergens faalt. Dit is zodat het programma niet crasht maar gewoon in de console een error print zal geven.
             # In 99.9% van de gevallen zal dit enkel gebeuren omdat de connectie tussen de plc & pc niet lukt. 
-            self.status = "Error"
+            self.status, self.meet_stand = "Error", "Testbank connectie gefaald."
             print("Error", "Testbank connectie gefaald.")
     
     # Hieronder staan functies die bij het object horen die we aanmaken. 
     
     def get_metingen(self):
         # Hier halen we data op via de webserver, we zetten ze om naar een lijst.
-        r = requests.get(self.url)
+        r = requests.get(self.url, timeout=(2, 5))
         
         columns_list = ["1", "2", "register", "value"]
         df = pd.read_csv(io.StringIO(r.content.decode('utf-8')), names=columns_list)
@@ -215,7 +215,7 @@ class TestBank(object):
     def read_register(self, register):
         # Deze functie zal gebruikt worden om een waarde in een register/vlag te lezen van de plc.
         value = requests.get(f"{self.url_readval}PDP,,{register},d")
-        return int(value)
+        return int(value.content)
     
     def step_counter_plus(self):
         # Deze functie zal als alles goed verlopen is in de cyclys stap, de plc laten weten dat de pc klaar is voor de volgende stap.
@@ -336,7 +336,7 @@ def page_dashboard(testCase):
             metric12, metric13, metric14, metric15 = st.columns(4)
             metric16, metric17, metric18, metric19 = st.columns(4)
             metric20, metric21, metric22, metric23 = st.columns(4)
-            metric24, metric25, metric26, metric_ = st.columns(4)
+            metric24, metric25, metric26, metric27 = st.columns(4)
             
             # Onze waardes defineren. 
             metric12.metric(label="Olie druk 1", value=f"{dsy[11]/testCase.register_bewerkingen[11]} bar")
@@ -357,6 +357,7 @@ def page_dashboard(testCase):
             metric24.metric(label="Temperatuur wikkeling 1", value=f"{dsy[20]/testCase.register_bewerkingen[20]} °C")
             metric25.metric(label="Temperatuur wikkeling 2", value=f"{dsy[21]/testCase.register_bewerkingen[21]} °C")
             metric26.metric(label="Temperatuur wikkeling 3", value=f"{dsy[22]/testCase.register_bewerkingen[22]} °C")
+            metric27.metric(label="Timer", value=f"{testCase.read_register('T27')} °C")
 
             st.markdown("### Elektrische metingen")
             
@@ -535,7 +536,12 @@ def main():
             
                 if sleep_time > 0:
                     time.sleep(sleep_time)
-            
+
+        elif testCase.meet_stand == "Testbank connectie gefaald.":
+            #Connectie gefaald cycle:
+            with placeholder.container():
+                st.title("Testbank connectie gefaald.")
+
     else:
         # Als ons object nog niet bestaat/in onze cache zit
         testCase = page_create_testbank()
