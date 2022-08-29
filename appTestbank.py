@@ -103,7 +103,6 @@ class TestBank(object):
             ]
             # De delingen voor de register waardes, in juiste volgorde (na sorting registers van klein naar groot).
             self.register_bewerkingen = [
-                1,
                 100,
                 1,
                 1,
