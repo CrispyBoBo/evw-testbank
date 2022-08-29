@@ -99,11 +99,10 @@ class TestBank(object):
                 'Temperatuur wikkeling 1',
                 'Temperatuur wikkeling 2',
                 'Temperatuur wikkeling 3',
-                'Temperatuur omgeving 1',
-                'Temperatuur omgeving 2',
-                'Temperatuur omkasting',
                 'Temperatuur olie 1',
                 'Temperatuur olie 2',
+                'Temperatuur omkasting',
+
             ]
             # De delingen voor de register waardes, in juiste volgorde (na sorting registers van klein naar groot).
             self.register_bewerkingen = [
@@ -118,8 +117,6 @@ class TestBank(object):
                 1,
                 1,
                 1,
-                10,
-                10,
                 10,
                 10,
                 10,
@@ -417,7 +414,7 @@ def main():
     # streamlit main app cycle
 
     if 'testCase' in st.session_state:
-        #als testvase al bestaat en in onze caching zit:
+        # als testcase al bestaat en in onze caching zit:
         testCase = st.session_state['testCase']
         
         
