@@ -154,7 +154,6 @@ class TestBank(object):
         df.sort_values('register', inplace=True)
         
         df = df.transpose()
-        print(df)
         data = df.iloc[1].values.flatten().tolist()
 
         return data
