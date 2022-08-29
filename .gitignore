@@ -12,4 +12,5 @@ pyvenv.cfg
 .env
 env
 metingen.xlsx
+~$metingen.xlsx
 pip-selfcheck.json
