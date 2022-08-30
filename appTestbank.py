@@ -146,8 +146,14 @@ class TestBank(object):
     
     def get_metingen(self):
         # Hier halen we data op via de webserver, we zetten ze om naar een lijst.
-        r = requests.get(self.url, timeout=(2, 5))
-        
+        try:
+            r = requests.get(self.url, timeout=(2, 5))
+        except:
+            print('exception error; request was denied by the PCD.')
+            time.sleep(3)
+            self.her_injecteren(self)
+            self.get_metingen(self)
+
         columns_list = ["1", "2", "register", "value"]
         df = pd.read_csv(io.StringIO(r.content.decode('utf-8')), names=columns_list)
         
@@ -163,6 +169,11 @@ class TestBank(object):
 
         return data
     
+    def her_injecteren(self):
+        print('Her injecteren...')
+        r = requests.get(self.injectielink)
+        print(r)
+
     def waardes_cachen(self):
         # We gebruiken deze funtie om de metingen te verwerken en om deze in een dataset te zetten en bijhouden.
         dsy = self.get_metingen()
@@ -437,7 +448,7 @@ def main():
                 timedelta = end - start
 
                 # Sleep time is hoeveel seconden de cycle moet pauzeren, hiervan trekken we onze timedelta aangezien we deze tijd al 'gepauzeerd' hebben.
-                sleep_time = 1 - timedelta
+                sleep_time = 0.5 - timedelta
 
                 # Hier checken we als onze sleeptime groter is dan 0, soms doordat een cycle eens langer duurt dan 1seconde (traag internet bv) kan het zijn dat onze sleeptime negatief zal uitkomen. We kunnen natuurlijk niet negatief aantal tijd wachten. 
                 if sleep_time > 0:
@@ -505,7 +516,7 @@ def main():
                 
                 end = time.perf_counter()
                 timedelta = end - start
-                sleep_time = 1 - timedelta
+                sleep_time = 0.5 - timedelta
                 
                 if sleep_time > 0:
                     time.sleep(sleep_time)
@@ -532,7 +543,7 @@ def main():
                     
                 end = time.perf_counter()
                 timedelta = end - start
-                sleep_time = 1 - timedelta
+                sleep_time = 0.5 - timedelta
             
                 if sleep_time > 0:
                     time.sleep(sleep_time)
