@@ -151,8 +151,8 @@ class TestBank(object):
         except:
             print('exception error; request was denied by the PCD.')
             time.sleep(3)
-            self.her_injecteren(self)
-            self.get_metingen(self)
+            self.her_injecteren
+            self.get_metingen
 
         columns_list = ["1", "2", "register", "value"]
         df = pd.read_csv(io.StringIO(r.content.decode('utf-8')), names=columns_list)
