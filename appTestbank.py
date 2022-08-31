@@ -207,13 +207,12 @@ class TestBank(object):
                     
         writer = pd.ExcelWriter("metingen.xlsx")
         df.to_excel(writer, sheet_name='metingen', index=False, na_rep='NaN')
-                    
+
         for column in df:
             column_length = max(df[column].astype(str).map(len).max(), len(column))
             col_idx = df.columns.get_loc(column)
             writer.sheets['metingen'].set_column(col_idx, col_idx, column_length)
 
-        print('writer save')
         writer.save()
     
     def abandon(self):
@@ -241,7 +240,7 @@ class TestBank(object):
 
     def in_error(self):
         # Error schrijven naar error vlag (voor pc) op de plc.   
-        self.send_value_register(1, 'F1103')
+        self.write_register(1, 'F1103')
     
     def mag_meten(self):
         # F1004 is de waar de plc laat weten dat er een meting mag volgen. Als F1004 = 1 is, mag de pc meten. Anders wacht de pc en gaan we niet de volgende stap uitvoeren. Als de stap is uitgevoerd zal de pc de vlag terug op 0 zeten.
@@ -286,7 +285,7 @@ def page_create_testbank():
     
     meet_stand = st.radio(
     "Automatisch of handmatig metingen opslaan:",
-    ( 'Handmatig', 'Automatisch', 'Overzicht')
+    ('Handmatig', 'Automatisch', 'Overzicht')
     )
     
     b_bekijken = st.button('Connectie met testbank maken')
@@ -351,7 +350,7 @@ def page_dashboard(testCase):
             metric16, metric17, metric18, metric19 = st.columns(4)
             metric20, metric21, metric22, metric23 = st.columns(4)
             metric24, metric25, metric26, metric27 = st.columns(4)
-            
+
             # Onze waardes defineren. 
             metric12.metric(label="Olie druk 1", value=f"{dsy[11]/testCase.register_bewerkingen[11]} bar")
             metric13.metric(label="Olie druk 2", value=f"{dsy[12]/testCase.register_bewerkingen[12]} bar")
@@ -422,8 +421,6 @@ def page_dashboard(testCase):
                 st.plotly_chart(fig2,use_container_width=True)
         
         st.markdown("""---""")
-
-
                 
 def main():
     # streamlit main app cycle
