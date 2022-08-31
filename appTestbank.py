@@ -147,27 +147,30 @@ class TestBank(object):
     def get_metingen(self):
         # Hier halen we data op via de webserver, we zetten ze om naar een lijst.
         try:
+            print('try cyclus')
             r = requests.get(self.url, timeout=(2, 5))
+            print(r)
+            print(r.content)
+
+            columns_list = ["1", "2", "register", "value"]
+            df = pd.read_csv(io.StringIO(r.content.decode('utf-8')), names=columns_list)
+        
+            df.drop(['1','2'], axis=1, inplace=True)
+
+            df['register'] = df['register'].str.replace('R','').astype(int)
+            df['value'] = df['value'].str.replace('d=','').astype(int)
+
+            df.sort_values('register', inplace=True)
+        
+            df = df.transpose()
+            data = df.iloc[1].values.flatten().tolist()
+            return data
+
         except:
             print('exception error; request was denied by the PCD.')
             time.sleep(3)
-            self.her_injecteren
-            self.get_metingen
-
-        columns_list = ["1", "2", "register", "value"]
-        df = pd.read_csv(io.StringIO(r.content.decode('utf-8')), names=columns_list)
-        
-        df.drop(['1','2'], axis=1, inplace=True)
-
-        df['register'] = df['register'].str.replace('R','').astype(int)
-        df['value'] = df['value'].str.replace('d=','').astype(int)
-
-        df.sort_values('register', inplace=True)
-        
-        df = df.transpose()
-        data = df.iloc[1].values.flatten().tolist()
-
-        return data
+            self.her_injecteren()
+            self.get_metingen()
     
     def her_injecteren(self):
         print('Her injecteren...')
