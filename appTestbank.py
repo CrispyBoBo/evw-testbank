@@ -3,7 +3,7 @@ import numpy as np # wiskunde pakket
 import pandas as pd # pandas is gemaakt op numpy, deze gebruiken we voor onze dataframes en excel communicatie
 import plotly.express as px # plotly gebruiken we voor onze grafieken
 import requests, io, time # requests is het pakket voor de http requests, io is het pakket voor de file input/output, time is het pakket voor de tijd handelingen
-from datetime import datetime # datetime is het pakket voor de tijd handelingen met datum
+from datetime import datetime, timedelta # datetime is het pakket voor de tijd handelingen met datum
 
 # settings van de webapp
 st.set_page_config(
@@ -33,7 +33,7 @@ class TestBank(object):
     De Testbank wordt aangemaakt met verschillende waarden, waarmee we deze objecten kunnen configureren adhv welke waarden onze testcase heeft.
     In de __init__ functie proberen we alles te configureren en verbinding te maken. We werken met het pricinipe EAFP.
     """
-    def __init__(self, naam, transfo_ratio, nominaal_vermogen, stabieliteits_factor, tijdsinterval, tijdsduur, meet_stand, nominaal_spanning):
+    def __init__(self, naam, transfo_ratio, nominaal_vermogen, stabiliteits_factor, tijdsinterval, tijdsduur, meet_stand, nominaal_spanning):
         
         try:
             # Ip van de plc.
@@ -48,27 +48,26 @@ class TestBank(object):
             self.url_writeval = f"http://{self.ip}/station_name/cgi-bin/writeVal.exe?"
 
             # Hier injecteren we de ordervalues & lezen we ze eens uit (in de background), als dit faalt stopt de try loop en is de connectie mislukt.
-            print('requests')
             requests.get(self.injectielink)
-            print('self injectie ok')
             requests.get(self.url)
-            print('url data ophalen ok')
             # Standaard waarden die we nodig hebben en moeten zetten zodat ze bestaan enkel als de request een succes was.
             self.metingen_dataset = []
             self.metingen_klaar = False
             self.run = True
-            self.step_counter = 0 
+            self.step_counter = 0
             self.status = "Verbonden"
-
+            self.eerste_meting = 0
+            self.sinds_eerste_meting = 0
+            
             # Deze waarden worden doorgegeven door de create functie. 
             self.meet_stand = meet_stand
             self.naam = naam
             self.transfo_ratio = transfo_ratio
             self.nominaal_vermogen = nominaal_vermogen
             self.nominaal_spanning = nominaal_spanning
-            self.stabiliteits_factor = stabieliteits_factor
-            self.tijdsinterval = tijdsinterval
-            self.tijdsduur = tijdsduur
+            self.stabiliteits_factor = stabiliteits_factor
+            self.tijdsinterval = tijdsinterval*60
+            self.tijdsduur = tijdsduur*60
 
             self.created = time.perf_counter() # Een object waarde die we aanmaken, mocht deze waarde nodig zijn.
             self.laatste_meting = 0 # Laatste meting.
@@ -76,6 +75,7 @@ class TestBank(object):
 
             # De titels van de register, in juiste volgorde (na sorting registers van klein naar groot) voor het excel bestand voor An.
             self.register_lijst = [
+                'Tijd',
                 'F - Frequentie',
                 'U12 - Spanning F1',
                 'U23 - Spanning F2',
@@ -88,7 +88,7 @@ class TestBank(object):
                 'Q - Reactief vermogen',
                 'S - Schijnbaar vermogen',
                 'Olie druk 1',
-                'Olie druk 2'
+                'Olie druk 2',
                 'Temperatuur water in',
                 'Temperatuur water uit',
                 'Temperatuur alternator',
@@ -102,11 +102,11 @@ class TestBank(object):
                 'Temperatuur olie 1',
                 'Temperatuur olie 2',
                 'Temperatuur omkasting',
-
             ]
             # De delingen voor de register waardes, in juiste volgorde (na sorting registers van klein naar groot).
             self.register_bewerkingen = [
-                100,
+                1,
+                10,
                 1,
                 1,
                 1,
@@ -133,24 +133,59 @@ class TestBank(object):
                 10,
                 10,
             ]
-            
-            print("Succes", "Connectie met testbank gemaakt.")
             
         except:
             # De except zal runnen als de try loop ergens faalt. Dit is zodat het programma niet crasht maar gewoon in de console een error print zal geven.
             # In 99.9% van de gevallen zal dit enkel gebeuren omdat de connectie tussen de plc & pc niet lukt. 
             self.status, self.meet_stand = "Error", "Testbank connectie gefaald."
             print("Error", "Testbank connectie gefaald.")
-    
+
+        if self.meet_stand == 'Overzicht':
+            self.write_val(0,'F1102') # meetstand automatisch uit.
+            self.write_val(0,'F1101') # manueel uit.
+            self.write_val(0,'R1100') # Stap 0
+            self.write_val(nominaal_vermogen, 'R1105') # nominaal vermogen naar plc schrijven.
+            self.write_val(stabiliteits_factor, 'R1101') # stabiliteits marge doorgeven.
+            self.write_val(tijdsinterval, 'R1103') # tijdsinterval doorsturen.
+            self.write_val(transfo_ratio, 'R1102') # doorgeven transfo ratio.
+            self.write_val(tijdsduur, 'R1104') # totale duur van vollast test.
+            self.write_val(nominaal_spanning, 'R1106') # nominale spanning naar plc sturen.
+            
+        elif self.meet_stand == 'Automatisch':
+            self.write_val(0,'R1100') # stap van pc naar plc schrijven.
+            self.write_val(1,'F1102') # meetstand automatisch doorgeven.
+            self.write_val(0,'F1101') # manueel uit.
+            self.write_val(nominaal_vermogen, 'R1105') # nominaal vermogen naar plc schrijven.
+            self.write_val(stabiliteits_factor, 'R1101') # stabiliteits marge doorgeven.
+            self.write_val(tijdsinterval, 'R1103') # tijdsinterval doorsturen.
+            self.write_val(transfo_ratio, 'R1102') # doorgeven transfo ratio.
+            self.write_val(tijdsduur, 'R1104') # totale duur van vollast test.
+            self.write_val(nominaal_spanning, 'R1106') # nominale spanning naar plc sturen.
+            self.step_counter_plus(0)
+        
+        elif self.meet_stand == 'Handmatig':
+            self.write_val(0,'F1102') # meetstand automatisch uit.
+            self.write_val(1,'F1101') # manueel aan
+            self.write_val(0,'R1100') # Stap 0
+            self.write_val(nominaal_vermogen, 'R1105') # nominaal vermogen naar plc schrijven.
+            self.write_val(stabiliteits_factor, 'R1101') # stabiliteits marge doorgeven.
+            self.write_val(tijdsinterval, 'R1103') # tijdsinterval doorsturen.
+            self.write_val(transfo_ratio, 'R1102') # doorgeven transfo ratio.
+            self.write_val(tijdsduur, 'R1104') # totale duur van vollast test.
+            self.write_val(nominaal_spanning, 'R1106') # nominale spanning naar plc sturen.
+        
+        else:
+            self.write_val(0,'F1102') # meetstand automatisch uit.
+            self.write_val(0,'F1101') # manueel aan
+            self.write_val(0,'R1100') # Stap 0
+            self.in_error()
+            
     # Hieronder staan functies die bij het object horen die we aanmaken. 
     
     def get_metingen(self):
         # Hier halen we data op via de webserver, we zetten ze om naar een lijst.
         try:
-            print('try cyclus')
             r = requests.get(self.url, timeout=(2, 5))
-            print(r)
-            print(r.content)
 
             columns_list = ["1", "2", "register", "value"]
             df = pd.read_csv(io.StringIO(r.content.decode('utf-8')), names=columns_list)
@@ -167,44 +202,55 @@ class TestBank(object):
             return data
 
         except:
-            print('exception error; request was denied by the PCD.')
+            print('ordervalues exception error; request was denied by the PCD.')
             time.sleep(1)
             self.her_injecteren()
             time.sleep(2)
             a = self.get_metingen()
-            print(a)
             return a
     
     def her_injecteren(self):
         print('Her injecteren...')
         r = requests.get(self.injectielink)
-        print(r)
 
     def waardes_cachen(self):
         # We gebruiken deze funtie om de metingen te verwerken en om deze in een dataset te zetten en bijhouden.
+        
+        if self.eerste_meting == 0:
+            self.eerste_meting = time.perf_counter()
+            
         dsy = self.get_metingen()
-        ds = [datetime.now().time().strftime("%H:%M:%S")] + dsy
+
+        time_delta = self.tijd_sinds_eerste_meting()
+        
+        ds = [time_delta] + dsy
         
         self.laatste_meting = time.perf_counter()
-        
+
         for e, _ in enumerate(ds):
             ds[e] = ds[e]/self.register_bewerkingen[e]
+        
+        ds[0] = str(timedelta(seconds=ds[0]))
         
         self.metingen_dataset.append(ds)
    
     def tijd_sinds_created(self):
         # Een functie die de als antwoord geeft hoeveel seconden er gepasseerd zijn sinds de connnectie is gemaakt.
         return time.perf_counter() - self.created
-    
    
     def tijd_sinds_laatste_meting(self):
         # Een functie die onze laatste meting waarde instelt.
-        self.sinds_laatste_meting = time.perf_counter() - self.laatste_meting
+        self.sinds_laatste_meting = int(time.perf_counter() - self.laatste_meting)
+        return self.sinds_laatste_meting
     
+    def tijd_sinds_eerste_meting(self):
+        # Een functie die onze laatste meting waarde instelt.
+        self.sinds_eerste_meting = int(time.perf_counter() - self.eerste_meting)
+        return self.sinds_eerste_meting
     
     def metingen_naar_excel(self):
         # Een functie die onze opgeslagen metingen in de data set in excel steekt.
-        df = pd.DataFrame(self.metingen_dataset, columns=['Tijd']+self.register_lijst)
+        df = pd.DataFrame(self.metingen_dataset, columns=self.register_lijst)
                     
         self.metingen_dataset = []
                     
@@ -220,46 +266,72 @@ class TestBank(object):
     
     def abandon(self):
         # De abandon functie, deze functie wordt opgeroepen door de abonden knop. Hier kunnen we de functionaliteit inzetten.
-        self.sinds_laatste_meting = self.tijdsinterval - 5
-        print("Abandon")
+        self.write_val(1,'F1200') # abandon vlag aan.
     
-    def write_register(self, value, register):
+    def pause(self):
+        status = self.read_val('F1201')
+        flip = status
+        
+        if status == 0:
+            flip = 1
+        elif status == 1:
+            flip = 0
+
+        self.write_val(flip, 'F1201')
+    
+    def write_val(self, value, register):
         # Deze functie zal gebruikt worden om een waarde in een register/vlag te schrijven op de plc.
-        r = requests.get(f"{self.url_writeval}PDP,,{register},d+{value}")
-        print(r)
+        try:
+            r = requests.get(f"{self.url_writeval}PDP,,{register},d+{value}")
+        except:
+            print('write exception error; request was denied by the PCD.')
+            time.sleep(1)
+            self.her_injecteren()
+            time.sleep(2)
+            self.write_val(value, register)
        
-    def read_register(self, register):
+    def read_val(self, register):
         # Deze functie zal gebruikt worden om een waarde in een register/vlag te lezen van de plc.
-        value = requests.get(f"{self.url_readval}PDP,,{register},d")
-        return int(value.content)
+        try:
+            r = requests.get(f"{self.url_readval}PDP,,{register},d")
+            return int(r.content)
+        except:
+            print('readval exception error; request was denied by the PCD.')
+            time.sleep(1)
+            self.her_injecteren()
+            time.sleep(2)
+            r = self.read_val(register)
+            return int(r)
     
-    def step_counter_plus(self):
+    def step_counter_plus(self, plc_step):
         # Deze functie zal als alles goed verlopen is in de cyclys stap, de plc laten weten dat de pc klaar is voor de volgende stap.
         # bv if R1000 = R1100 => volgende stap
         # De plc zet de waarde R1000 op welke stap de pc moet uitvoeren, als de pc klaar is zet hij R1100 op hetzelfde nummer.    
-        self.step_counter += 1
-        self.write_register(self.step_counter, 'R1100')
-        self.write_register(0, 'F1004')
+        self.step_counter = plc_step
+        plc_new_step = plc_step + 1
+        
+        self.write_val(plc_new_step, 'R1100')
+        self.write_val(0, 'F1004')
 
     def in_error(self):
         # Error schrijven naar error vlag (voor pc) op de plc.   
-        self.write_register(1, 'F1103')
+        self.write_val(1, 'F1103')
     
     def mag_meten(self):
         # F1004 is de waar de plc laat weten dat er een meting mag volgen. Als F1004 = 1 is, mag de pc meten. Anders wacht de pc en gaan we niet de volgende stap uitvoeren. Als de stap is uitgevoerd zal de pc de vlag terug op 0 zeten.
         # bv: If self.step_counter == R1100 - 1 && F1004 = 1: mag de pc naar de volgende stap.
-        return self.read_register('F1004')
+        return self.read_val('F1004')
 
     def get_plc_counter(self):
         # Deze functie return het register R1100, de stap counter op de plc.
-        return self.read_register('R1100')
+        return self.read_val('R1000')
 
 
 # Algemene functies
 
-def testbank_create(naam, transfo_ratio, nominaal_vermogen, stabieliteits_factor, tijdsinterval, tijdsduur, meet_stand, nominaal_spanning):
+def testbank_create(naam, transfo_ratio, nominaal_vermogen, stabiliteits_factor, tijdsinterval, tijdsduur, meet_stand, nominaal_spanning):
     # Het aanmaken van het testbank object. 
-    test_case = TestBank(naam=naam, transfo_ratio=transfo_ratio, nominaal_vermogen=nominaal_vermogen, stabieliteits_factor=stabieliteits_factor, tijdsinterval=tijdsinterval, tijdsduur=tijdsduur, meet_stand=meet_stand, nominaal_spanning=nominaal_spanning)
+    test_case = TestBank(naam=naam, transfo_ratio=transfo_ratio, nominaal_vermogen=nominaal_vermogen, stabiliteits_factor=stabiliteits_factor, tijdsinterval=tijdsinterval, tijdsduur=tijdsduur, meet_stand=meet_stand, nominaal_spanning=nominaal_spanning)
     
     return test_case
 
@@ -275,12 +347,12 @@ def page_create_testbank():
     naam = st.text_input('Naam van de testcase', type="default", value="Testbank")
     
     transfo_ratio = st.selectbox("Vermogen transfo ratio (A)", ['100/5','300/5','500/5','1000/5','3000/5','5000/5'])
-    
+
     nominaal_vermogen = st.number_input('Nominaal vermogen (kW)', value=1000, step=1, min_value=0, max_value=100000000)
     
     nominaal_spanning = st.number_input('Nominale spanning (V)', value=400, step=1, min_value=0, max_value=1000)
     
-    stabieliteits_factor = st.number_input('Stabiliteitsfactor (%)', value=1.00, step=0.01, min_value=0.00, max_value=5.00)  
+    stabiliteits_factor = st.number_input('Stabiliteitsfactor (%)', value=5, step=1, min_value=0, max_value=10)  
         
     tijdsinterval = st.slider('Tijdsinterval meting (minuten)', 0, 10, 5)
     
@@ -299,7 +371,9 @@ def page_create_testbank():
         #Als de knop 'Connectie met testbank maken' ingeduwt is maken we het object aan. Deze knop laat ons ook herlopen door de cycle maar nu zal het object in onze cache gestoken worden.
         with st.spinner(f"Test object aanmaken..."):  
             
-            testCase = testbank_create(naam, transfo_ratio, nominaal_vermogen, stabieliteits_factor, tijdsinterval, tijdsduur, meet_stand, nominaal_spanning)
+            transfo_ratio = transfo_ratio.replace('/5','')
+            
+            testCase = testbank_create(naam, transfo_ratio, nominaal_vermogen, stabiliteits_factor, tijdsinterval, tijdsduur, meet_stand, nominaal_spanning)
             testCase.meten = False
     
             return testCase
@@ -318,7 +392,7 @@ def page_dashboard(testCase):
         
         # Deze 4 zijn data lijsten die we gaan tonen
         ds_kw.append(dsy[8])
-        ds_hz.append(dsy[0]/testCase.register_bewerkingen[0])
+        ds_hz.append(dsy[0]/testCase.register_bewerkingen[1])
         ds_spanning.append(dsy[1])
         ds_tijd.append(dsx)
         
@@ -355,25 +429,24 @@ def page_dashboard(testCase):
             metric24, metric25, metric26, metric27 = st.columns(4)
 
             # Onze waardes defineren. 
-            metric12.metric(label="Olie druk 1", value=f"{dsy[11]/testCase.register_bewerkingen[11]} bar")
-            metric13.metric(label="Olie druk 2", value=f"{dsy[12]/testCase.register_bewerkingen[12]} bar")
-            metric14.metric(label="Temperatuur olie 1", value=f"{dsy[23]/testCase.register_bewerkingen[23]} °C")
-            metric15.metric(label="Temperatuur olie 2", value=f"{dsy[24]/testCase.register_bewerkingen[24]} °C")
+            metric12.metric(label="Olie druk 1", value=f"{dsy[11]/testCase.register_bewerkingen[12]} bar")
+            metric13.metric(label="Olie druk 2", value=f"{dsy[12]/testCase.register_bewerkingen[13]} bar")
+            metric14.metric(label="Temperatuur olie 1", value=f"{dsy[23]/testCase.register_bewerkingen[24]} °C")
+            metric15.metric(label="Temperatuur olie 2", value=f"{dsy[24]/testCase.register_bewerkingen[25]} °C")
 
-            metric16.metric(label="Temperatuur alternator", value=f"{dsy[15]/testCase.register_bewerkingen[15]} °C")
-            metric17.metric(label="Temperatuur inlaat", value=f"{dsy[16]/testCase.register_bewerkingen[16]} °C")
-            metric18.metric(label="Temperatuur omkasting", value=f"{dsy[25]/testCase.register_bewerkingen[25]} °C")
-            metric19.metric(label="Temperatuur afblaas", value=f"{dsy[17]/testCase.register_bewerkingen[17]} °C")
+            metric16.metric(label="Temperatuur alternator", value=f"{dsy[15]/testCase.register_bewerkingen[16]} °C")
+            metric17.metric(label="Temperatuur inlaat", value=f"{dsy[16]/testCase.register_bewerkingen[17]} °C")
+            metric18.metric(label="Temperatuur omkasting", value=f"{dsy[25]/testCase.register_bewerkingen[26]} °C")
+            metric19.metric(label="Temperatuur afblaas", value=f"{dsy[17]/testCase.register_bewerkingen[18]} °C")
 
-            metric20.metric(label="Temperatuur water in", value=f"{dsy[13]/testCase.register_bewerkingen[13]} °C")
-            metric21.metric(label="Temperatuur water uit", value=f"{dsy[14]/testCase.register_bewerkingen[14]} °C")
-            metric22.metric(label="Temperatuur uitlaat 1", value=f"{dsy[18]/testCase.register_bewerkingen[18]} °C")
-            metric23.metric(label="Temperatuur uitlaat 2", value=f"{dsy[19]/testCase.register_bewerkingen[19]} °C")
+            metric20.metric(label="Temperatuur water in", value=f"{dsy[13]/testCase.register_bewerkingen[14]} °C")
+            metric21.metric(label="Temperatuur water uit", value=f"{dsy[14]/testCase.register_bewerkingen[15]} °C")
+            metric22.metric(label="Temperatuur uitlaat 1", value=f"{dsy[18]/testCase.register_bewerkingen[19]} °C")
+            metric23.metric(label="Temperatuur uitlaat 2", value=f"{dsy[19]/testCase.register_bewerkingen[20]} °C")
 
-            metric24.metric(label="Temperatuur wikkeling 1", value=f"{dsy[20]/testCase.register_bewerkingen[20]} °C")
-            metric25.metric(label="Temperatuur wikkeling 2", value=f"{dsy[21]/testCase.register_bewerkingen[21]} °C")
-            metric26.metric(label="Temperatuur wikkeling 3", value=f"{dsy[22]/testCase.register_bewerkingen[22]} °C")
-            metric27.metric(label="Timer", value=f"{testCase.read_register('T27')} °C")
+            metric24.metric(label="Temperatuur wikkeling 1", value=f"{dsy[20]/testCase.register_bewerkingen[21]} °C")
+            metric25.metric(label="Temperatuur wikkeling 2", value=f"{dsy[21]/testCase.register_bewerkingen[22]} °C")
+            metric26.metric(label="Temperatuur wikkeling 3", value=f"{dsy[22]/testCase.register_bewerkingen[23]} °C")
 
             st.markdown("### Elektrische metingen")
             
@@ -391,7 +464,7 @@ def page_dashboard(testCase):
             metric4.metric(label="I1 - Stroom L1", value=f"{dsy[4]} A")
             metric5.metric(label="I2 - Stroom L2", value=f"{dsy[5]} A")
             metric6.metric(label="I3 - Stroom L3", value=f"{dsy[6]} A")
-            metric11.metric(label="PF - Cos φ", value=f"{dsy[7]/testCase.register_bewerkingen[7]}")
+            metric11.metric(label="PF - Cos φ", value=f"{dsy[7]/testCase.register_bewerkingen[8]}")
             
             metric7.metric(label="P - Actief vermogen", value=f"{dsy[8]} kW")
             metric8.metric(label="Q - Reactief vermogen", value=f"{dsy[9]} VAR")
@@ -431,10 +504,13 @@ def main():
     if 'testCase' in st.session_state:
         # als testcase al bestaat en in onze caching zit:
         testCase = st.session_state['testCase']
+        testCase.write_val(1,'F1100') 
+        testCase.write_val(0,'F1103')
         
         
         if testCase.meet_stand == 'Overzicht':
             # Overzicht stand
+            
             while testCase.meet_stand == 'Overzicht':
                 # De while loop / cycle die we zullen doorlopen om de metingen elke keer te tonen.
                 
@@ -451,24 +527,27 @@ def main():
                 timedelta = end - start
 
                 # Sleep time is hoeveel seconden de cycle moet pauzeren, hiervan trekken we onze timedelta aangezien we deze tijd al 'gepauzeerd' hebben.
-                sleep_time = 0.05
+                sleep_time = 0.5 - timedelta
 
-                # Hier checken we als onze sleeptime groter is dan 0, soms doordat een cycle eens langer duurt dan 1seconde (traag internet bv) kan het zijn dat onze sleeptime negatief zal uitkomen. We kunnen natuurlijk niet negatief aantal tijd wachten. 
+                # # Hier checken we als onze sleeptime groter is dan 0, soms doordat een cycle eens langer duurt dan 1seconde (traag internet bv) kan het zijn dat onze sleeptime negatief zal uitkomen. We kunnen natuurlijk niet negatief aantal tijd wachten. 
                 if sleep_time > 0:
                     time.sleep(sleep_time)
-                
         
         elif testCase.meet_stand == 'Automatisch':
-            # Automatische stand    
+            # Automatische stand
+            
             with st.sidebar:
                 
                 if st.button("pause / continue"):
                     # De run status van ons object omdraaien. not zal de bool/vlag inverteren.
-                    testCase.run = not testCase.run
+                    testCase.pause()
 
                 if st.button('Meting vroegtijdig naar excel'):
                     # Mocht door 1 of andere reden alle metingen al in excel moeten zitten.
                     testCase.metingen_naar_excel()
+                    testCase.step_counter_plus(13)
+                    testCase.meet_stand = 'Overzicht'
+                    main()
                     
                 if st.button('Abandon'):
                     # De abandon knop, hier kunnen we de tijd sinds laatste metingen zetten op een andere waarde
@@ -479,52 +558,82 @@ def main():
             while testCase.meet_stand == 'Automatisch':
                 # Automatische cycle met zelfde werking als overzicht, behalve de metingen.
                 start = time.perf_counter()
-                
                 # We checken als de plc zegt dat we mogen meten
+                
                 if testCase.mag_meten():
-                    
                     # We kijken in welke stap de plc momenteel zit, en gaan onze logica uitvoeren.
                     plc_step = testCase.get_plc_counter()
-                    
                     # We gebruiken match om een bepaalde stap te matchen aan de plc en deze uit te voeren. We kunnen zoveel cases/stappen toe voegen dat we maar willen. Functionaliteit zetten we achter onze 'case n:' en op het einde gaan we 1 stap omhoog.
                     match plc_step:
                     
                         case 1:
-                            # Als stap 1 gedaan is, zetten wij onze eigen counter 1tje hoger zodat de plc weet dat we klaar zijn.
-                            # We zetten ook ons register die zegt dat we mogen meten terug op 0 in deze functie.
-                            testCase.step_counter_plus()
-
+                            # Als stap 1 gedaan is, zetten wij onze eigen counter op dezelfde stap als de plc zodat de plc weet dat we klaar zijn.
+                            # We zetten ook de vlag die zegt dat we mogen meten (F1004) terug op 0.
+                            testCase.waardes_cachen()
+                            testCase.step_counter_plus(plc_step)
+                            
                         case 2:
-                            testCase.step_counter_plus()
+                            testCase.waardes_cachen()
+                            testCase.step_counter_plus(plc_step)
                         
                         case 3:
-                            testCase.step_counter_plus()
+                            testCase.waardes_cachen()
+                            testCase.step_counter_plus(plc_step)
 
                         case 4:
-                            testCase.step_counter_plus()
+                            testCase.waardes_cachen()
+                            testCase.step_counter_plus(plc_step)
 
                         case 5:
-                            testCase.step_counter_plus()
+                            testCase.waardes_cachen()
+                            testCase.step_counter_plus(plc_step)
                         
                         case 6:
-                            testCase.step_counter_plus()
+                            testCase.waardes_cachen()
+                            testCase.step_counter_plus(plc_step)
 
                         case 7:
-                            testCase.step_counter_plus()
+                            testCase.waardes_cachen()
+                            testCase.step_counter_plus(plc_step)
                             
                         case 8:
-                            testCase.step_counter_plus()
+                            testCase.waardes_cachen()
+                            testCase.step_counter_plus(plc_step)
                             
+                        case 9:
+                            testCase.waardes_cachen()
+                            testCase.step_counter_plus(plc_step)
+                            
+                        case 10:
+                            testCase.waardes_cachen()
+                            testCase.step_counter_plus(plc_step)
+                            
+                        case 11:
+                            testCase.waardes_cachen()
+                            testCase.step_counter_plus(plc_step)
+                            
+                        case 12:
+                            testCase.waardes_cachen()
+                            testCase.step_counter_plus(plc_step)
+                            
+                        case 13:
+                            testCase.metingen_naar_excel()
+                            testCase.step_counter_plus(plc_step)
+                            st.balloons()
+                            testCase.meet_stand = 'Overzicht'
+                            main()
+                               
                 page_dashboard(testCase)
                 
                 end = time.perf_counter()
                 timedelta = end - start
-                sleep_time = 0.05
+                sleep_time = 0.5 - timedelta
                 
                 if sleep_time > 0:
                     time.sleep(sleep_time)
                 
         elif testCase.meet_stand == 'Handmatig':
+
             # Handmatige stand
             with st.sidebar:
                 
@@ -535,6 +644,8 @@ def main():
                 if st.button('Metingen naar excel'):
                     # Hier zetten we onze metingen van onze cache in een excel bestand.
                     testCase.metingen_naar_excel()
+                    testCase.meet_stand = 'Overzicht'
+                    main()
                 
                 st.markdown("""---""")     
             
@@ -546,7 +657,7 @@ def main():
                     
                 end = time.perf_counter()
                 timedelta = end - start
-                sleep_time = 0.05
+                sleep_time = 0.5 - timedelta
             
                 if sleep_time > 0:
                     time.sleep(sleep_time)
