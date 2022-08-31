@@ -137,8 +137,8 @@ class TestBank(object):
         except:
             # De except zal runnen als de try loop ergens faalt. Dit is zodat het programma niet crasht maar gewoon in de console een error print zal geven.
             # In 99.9% van de gevallen zal dit enkel gebeuren omdat de connectie tussen de plc & pc niet lukt. 
-            self.status, self.meet_stand = "Error", "Testbank connectie gefaald."
-            print("Error", "Testbank connectie gefaald.")
+            self.status = "Error"
+            self.meet_stand = "Geen connectie"
 
         if self.meet_stand == 'Overzicht':
             self.write_val(0,'F1102') # meetstand automatisch uit.
@@ -174,6 +174,9 @@ class TestBank(object):
             self.write_val(tijdsduur, 'R1104') # totale duur van vollast test.
             self.write_val(nominaal_spanning, 'R1106') # nominale spanning naar plc sturen.
         
+        elif self.meet_stand == 'Geen connectie':
+            print("Error", "Testbank connectie gefaald.")
+            
         else:
             self.write_val(0,'F1102') # meetstand automatisch uit.
             self.write_val(0,'F1101') # manueel aan
@@ -254,7 +257,7 @@ class TestBank(object):
                     
         self.metingen_dataset = []
                     
-        writer = pd.ExcelWriter("metingen.xlsx")
+        writer = pd.ExcelWriter(f"{self.naam}.xlsx")
         df.to_excel(writer, sheet_name='metingen', index=False, na_rep='NaN')
 
         for column in df:
@@ -344,7 +347,7 @@ def page_create_testbank():
     st.markdown("Als je deze opnieuw wilt instellen, klik dan op 'ctrl'+'f5' of herlaad de pagina.")
 
     # Dit zijn de inputs die we vragen en adhv deze waardes het object aanmaken.   
-    naam = st.text_input('Naam van de testcase', type="default", value="Testbank")
+    naam = st.text_input('Naam van de testcase', type="default", value="Testbank metingen")
     
     transfo_ratio = st.selectbox("Vermogen transfo ratio (A)", ['100/5','300/5','500/5','1000/5','3000/5','5000/5'])
 
@@ -526,7 +529,7 @@ def main():
                 # Onze time delta is hoelang de loop erover gedaan heeft
                 timedelta = end - start
 
-                # Sleep time is hoeveel seconden de cycle moet pauzeren, hiervan trekken we onze timedelta aangezien we deze tijd al 'gepauzeerd' hebben.
+                # Sleep time is hoeveel seconden de cycle moet pauzeren, hiervan trekken we onze timedelta aangezien we die tijd al 'gepauzeerd' hebben.
                 sleep_time = 0.5 - timedelta
 
                 # # Hier checken we als onze sleeptime groter is dan 0, soms doordat een cycle eens langer duurt dan 1seconde (traag internet bv) kan het zijn dat onze sleeptime negatief zal uitkomen. We kunnen natuurlijk niet negatief aantal tijd wachten. 
