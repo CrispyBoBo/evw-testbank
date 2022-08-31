@@ -168,8 +168,9 @@ class TestBank(object):
 
         except:
             print('exception error; request was denied by the PCD.')
-            time.sleep(3)
+            time.sleep(1)
             self.her_injecteren()
+            time.sleep(2)
             a = self.get_metingen()
             print(a)
             return a
